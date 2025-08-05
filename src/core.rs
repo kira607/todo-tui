@@ -1,4 +1,5 @@
 use crate::utils::generate_id;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -8,6 +9,7 @@ pub struct Task {
     pub id: String,
     pub title: String,
     pub done: bool,
+    pub created: DateTime<Utc>,
 }
 
 #[derive(Default)]
@@ -41,6 +43,7 @@ impl Tasks {
             id: generate_id(None),
             title: title.to_string(),
             done: false,
+            created: Utc::now(),
         };
         self.tasks.push(task);
         self.tasks.last().unwrap()
