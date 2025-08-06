@@ -9,7 +9,7 @@ use ratatui::{
 
 use crate::{
     core::Tasks,
-    widgets::{InputPopup, TasksList},
+    widgets::{InputPopup, TaskInfo, TasksList},
 };
 
 pub enum Mode {
@@ -19,10 +19,14 @@ pub enum Mode {
 }
 
 pub struct App {
+    // storage
     tasks: Tasks,
+    // state
     running: bool,
     mode: Mode,
+    // widgets
     tasks_list: TasksList,
+    task_info: TaskInfo,
     popup: InputPopup,
 }
 
@@ -34,6 +38,7 @@ impl App {
             running: true,
             mode: Mode::Normal,
             tasks_list: TasksList::new(items),
+            task_info: TaskInfo::default(),
             popup: InputPopup::default(),
         }
     }
@@ -70,12 +75,12 @@ impl App {
                         .set_input(&self.tasks_list.selected_item().unwrap().title);
                 }
                 KeyCode::Char('q') | KeyCode::Esc => self.prepare_shutdown(),
-                KeyCode::Char('h') | KeyCode::Left => self.tasks_list.select_none(),
-                KeyCode::Char('j') | KeyCode::Down => self.tasks_list.select_next(),
-                KeyCode::Char('k') | KeyCode::Up => self.tasks_list.select_previous(),
-                KeyCode::Char('g') | KeyCode::Home => self.tasks_list.select_first(),
-                KeyCode::Char('G') | KeyCode::End => self.tasks_list.select_last(),
-                KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter => {
+                KeyCode::Char('h') | KeyCode::Left => self.select_none(),
+                KeyCode::Char('j') | KeyCode::Down => self.select_next(),
+                KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
+                KeyCode::Char('g') | KeyCode::Home => self.select_first(),
+                KeyCode::Char('G') | KeyCode::End => self.select_last(),
+                KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => {
                     self.toggle_status();
                 }
                 _ => {}
@@ -118,10 +123,36 @@ impl App {
         }
     }
 
+    fn select_none(&mut self) {
+        self.tasks_list.select_none();
+        self.task_info.clear();
+    }
+
+    fn select_next(&mut self) {
+        self.tasks_list.select_next();
+        self.update_task_info(); // needs another update
+    }
+
+    fn select_previous(&mut self) {
+        self.tasks_list.select_previous();
+        self.update_task_info();
+    }
+
+    fn select_first(&mut self) {
+        self.tasks_list.select_first();
+        self.update_task_info();
+    }
+
+    fn select_last(&mut self) {
+        self.tasks_list.select_last();
+        self.update_task_info(); // needs another update
+    }
+
     fn toggle_status(&mut self) {
         let toggled = self.tasks_list.toggle_status();
         if let Some(task) = toggled {
             self.tasks.toggle(&task.id);
+            self.update_task_info();
         }
     }
 
@@ -129,19 +160,29 @@ impl App {
         self.running = false;
         self.tasks.save().unwrap();
     }
+
+    /// Update a [`TaskInfo`] widget based on
+    /// currently selected item in [`TasksList`] widget.
+    fn update_task_info(&mut self) {
+        if let Some(task) = self.tasks_list.selected_item() {
+            self.task_info.set_task(task);
+        }
+    }
 }
 
 impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let [header_area, main_area, footer_area] = Layout::vertical([
+        let [header_area, main_area, task_info_area, footer_area] = Layout::vertical([
             Constraint::Length(2),
-            Constraint::Fill(1),
+            Constraint::Fill(8),
+            Constraint::Fill(2),
             Constraint::Length(1),
         ])
         .areas(area);
 
         App::render_header(header_area, buf);
-        self.render_list(main_area, buf);
+        self.tasks_list.render(main_area, buf);
+        self.task_info.render(task_info_area, buf);
         App::render_footer(footer_area, buf);
 
         match self.mode {
@@ -156,14 +197,10 @@ impl Widget for &mut App {
 /// Rendering logic for the app
 impl App {
     fn render_header(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("Ratatui List Example")
+        Paragraph::new("My app")
             .bold()
             .centered()
             .render(area, buf);
-    }
-
-    fn render_list(&mut self, area: Rect, buf: &mut Buffer) {
-        self.tasks_list.render(area, buf);
     }
 
     fn render_footer(area: Rect, buf: &mut Buffer) {

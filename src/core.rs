@@ -1,5 +1,5 @@
 use crate::utils::generate_id;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ pub struct Task {
     pub title: String,
     pub done: bool,
     pub created: DateTime<Utc>,
+    pub scheduled: Option<NaiveDate>,
 }
 
 #[derive(Default)]
@@ -44,6 +45,7 @@ impl Tasks {
             title: title.to_string(),
             done: false,
             created: Utc::now(),
+            scheduled: None,
         };
         self.tasks.push(task);
         self.tasks.last().unwrap()

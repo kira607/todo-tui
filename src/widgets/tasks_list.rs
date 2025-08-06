@@ -38,19 +38,13 @@ impl TasksList {
     }
 
     pub fn selected_item(&self) -> Option<&Task> {
-        if let Some(i) = self.selected() {
-            self.items.get(i)
-        } else {
-            None
-        }
+        let i = self.state.selected()?;
+        self.items.get(i)
     }
 
     pub fn selected_item_mut(&mut self) -> Option<&mut Task> {
-        if let Some(i) = self.selected() {
-            self.items.get_mut(i)
-        } else {
-            None
-        }
+        let i = self.state.selected()?;
+        self.items.get_mut(i)
     }
 
     pub fn select_none(&mut self) {
@@ -58,11 +52,23 @@ impl TasksList {
     }
 
     pub fn select_next(&mut self) {
-        self.state.select_next();
+        match self.state.selected() {
+            None => self.state.select(Some(0)),
+            Some(i) => {
+                if i + 1 < self.items.len() {
+                    self.state.select(Some(i + 1));
+                }
+            }
+        }
     }
 
     pub fn select_previous(&mut self) {
-        self.state.select_previous();
+        match self.state.selected() {
+            None => self.state.select(Some(self.items.len() - 1)),
+            Some(_) => {
+                self.state.select_previous();
+            }
+        }
     }
 
     pub fn select_first(&mut self) {
@@ -70,7 +76,7 @@ impl TasksList {
     }
 
     pub fn select_last(&mut self) {
-        self.state.select_last();
+        self.state.select(Some(self.items.len() - 1));
     }
 
     pub fn toggle_status(&mut self) -> Option<&Task> {
@@ -144,8 +150,14 @@ impl Widget for &mut TasksList {
 impl From<&Task> for ListItem<'_> {
     fn from(value: &Task) -> Self {
         let line = match value.done {
-            true => Line::styled(format!(" ✓ {}", value.title), COMPLETED_TEXT_FG_COLOR),
-            false => Line::styled(format!(" ☐ {}", value.title), TEXT_FG_COLOR),
+            true => Line::styled(
+                format!(" ✓ {}", value.title),
+                COMPLETED_TEXT_FG_COLOR,
+            ),
+            false => Line::styled(
+                format!(" ☐ {}", value.title),
+                TEXT_FG_COLOR,
+            ),
         };
         ListItem::new(line)
     }
