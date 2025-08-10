@@ -20,14 +20,6 @@ pub struct Tasks {
 }
 
 impl Tasks {
-    /// Create an instance of a TaskManager from a vector of Tasks.
-    pub fn from_tasks(tasks: Vec<Task>) -> Self {
-        Self {
-            file_path: PathBuf::default(),
-            tasks: tasks,
-        }
-    }
-
     /// Create an instance of a TaskManager from a tasks file path.
     pub fn from_path(path: &Path) -> Self {
         let mut s = Self {
@@ -56,20 +48,20 @@ impl Tasks {
         &self.tasks
     }
 
-    /// Get a task by id.
-    pub fn get(&self, id: &str) -> Option<&Task> {
-        self.tasks.iter().find(|t| t.id == id)
-    }
+    // /// Get a task by id.
+    // pub fn get(&self, id: &str) -> Option<&Task> {
+    //     self.tasks.iter().find(|t| t.id == id)
+    // }
 
-    /// Get a task at given index.
-    pub fn at(&self, index: usize) -> Option<&Task> {
-        self.tasks.get(index)
-    }
+    // /// Get a task at given index.
+    // pub fn at(&self, index: usize) -> Option<&Task> {
+    //     self.tasks.get(index)
+    // }
 
-    /// Get the number of tasks.
-    pub fn count(&self) -> usize {
-        self.tasks.len()
-    }
+    // /// Get the number of tasks.
+    // pub fn count(&self) -> usize {
+    //     self.tasks.len()
+    // }
 
     /// Toggle a task completion.
     pub fn toggle(&mut self, id: &str) {

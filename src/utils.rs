@@ -1,4 +1,6 @@
-use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::{
+    layout::{Constraint, Flex, Layout, Rect},
+};
 use uuid::Uuid;
 
 /// Генерирует уникальный ID с необязательным префиксом.

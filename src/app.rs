@@ -1,7 +1,6 @@
 use ratatui::{
-    DefaultTerminal,
-    buffer::Buffer,
-    crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+    DefaultTerminal, Frame,
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{Constraint, Layout, Rect},
     prelude::Stylize,
     widgets::{Paragraph, Widget},
@@ -9,13 +8,26 @@ use ratatui::{
 
 use crate::{
     core::Tasks,
-    widgets::{InputPopup, TaskInfo, TasksList},
+    utils::center,
+    widgets::{
+        component::Component,
+        input_field::{InputField, InputFieldMsg},
+        task_info::TaskInfo,
+        tasks_list::{TasksList, TasksListMsg},
+    },
 };
 
+#[derive(Clone, Copy)]
 pub enum Mode {
     Normal,
     Insert,
     Edit,
+}
+
+pub enum AppMsg {
+    Input(InputFieldMsg),
+    TasksList(TasksListMsg),
+    Quit,
 }
 
 pub struct App {
@@ -27,9 +39,141 @@ pub struct App {
     // widgets
     tasks_list: TasksList,
     task_info: TaskInfo,
-    popup: InputPopup,
+    input: InputField,
 }
 
+// Component
+impl Component for App {
+    type Msg = AppMsg;
+
+    fn draw(&mut self, frame: &mut Frame, area: Rect) {
+        let [header_area, main_area, task_info_area, footer_area] = Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Fill(8),
+            Constraint::Fill(2),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+        let input_area = center(area, Constraint::Percentage(50), Constraint::Length(5));
+
+        Paragraph::new("Tasks app")
+            .bold()
+            .centered()
+            .render(header_area, frame.buffer_mut());
+        self.tasks_list.draw(frame, main_area);
+        self.task_info.draw(frame, task_info_area);
+        Paragraph::new("Use ↓↑ to move, ← to unselect, → to change status, g/G to go top/bottom.")
+            .centered()
+            .render(footer_area, frame.buffer_mut());
+
+        match self.mode {
+            Mode::Normal => {}
+            Mode::Insert | Mode::Edit => self.input.draw(frame, input_area),
+        }
+    }
+
+    fn handle_event(&mut self, event: Event) -> Option<Self::Msg> {
+        let Event::Key(key) = event else {
+            return None;
+        };
+        if key.kind != KeyEventKind::Press {
+            return None;
+        }
+        match self.mode {
+            Mode::Normal => match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => Some(AppMsg::Quit),
+                _ => {
+                    if let Some(msg) = self.tasks_list.handle_event(event) {
+                        return Some(AppMsg::TasksList(msg));
+                    }
+                    None
+                }
+            },
+            Mode::Insert | Mode::Edit => {
+                if let Some(msg) = self.input.handle_event(event) {
+                    return Some(AppMsg::Input(msg));
+                }
+                None
+            }
+        }
+    }
+}
+
+// Messages handlers
+impl App {
+    fn on_input_submited(&mut self, input: String) {
+        match self.mode {
+            Mode::Normal => panic!("Unexpected message"),
+            Mode::Insert => self.add_task(&input),
+            Mode::Edit => self.update_task_title(&input),
+        }
+    }
+
+    fn on_input_canceled(&mut self) {
+        self.mode = Mode::Normal;
+    }
+
+    fn on_add_task(&mut self) {
+        self.mode = Mode::Insert;
+        self.input.clear().set_title("Add a new task");
+    }
+
+    fn on_edit_task_title(&mut self) {
+        let Some(task) = self.tasks_list.selected_item() else {
+            return;
+        };
+        self.mode = Mode::Edit;
+        self.input.clear().set_title("Edit a task title");
+        self.input.set_input(&task.title);
+    }
+
+    fn on_toggle_status(&mut self) {
+        let toggled = self.tasks_list.toggle_status();
+        if let Some(task) = toggled {
+            self.tasks.toggle(&task.id);
+            self.update_task_info();
+        }
+    }
+
+    fn on_delete_task(&mut self) {
+        if let Some(task) = self.tasks_list.remove_selected() {
+            self.tasks.delete(&task.id);
+        }
+        self.update_task_info();
+    }
+
+    fn on_selected_none(&mut self) {
+        self.tasks_list.select_none();
+        self.task_info.clear();
+    }
+
+    fn on_selected_next(&mut self) {
+        self.tasks_list.select_next();
+        self.update_task_info(); // needs another update
+    }
+
+    fn on_selected_previous(&mut self) {
+        self.tasks_list.select_previous();
+        self.update_task_info();
+    }
+
+    fn on_selected_first(&mut self) {
+        self.tasks_list.select_first();
+        self.update_task_info();
+    }
+
+    fn on_selected_last(&mut self) {
+        self.tasks_list.select_last();
+        self.update_task_info(); // needs another update
+    }
+
+    fn on_quit(&mut self) {
+        self.running = false;
+        self.tasks.save().unwrap();
+    }
+}
+
+// Stuff
 impl App {
     pub fn new(tasks: Tasks) -> Self {
         let items = tasks.all().to_vec();
@@ -39,173 +183,78 @@ impl App {
             mode: Mode::Normal,
             tasks_list: TasksList::new(items),
             task_info: TaskInfo::default(),
-            popup: InputPopup::default(),
+            input: InputField::default(),
         }
     }
 
     pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
         while self.running {
-            terminal.draw(|frame| frame.render_widget(&mut self, frame.area()))?;
-            if let Event::Key(key) = event::read()? {
-                self.handle_key(key);
-            };
+            terminal.draw(|frame| self.draw(frame, frame.area()))?;
+            let event = event::read()?;
+            let msg = self.handle_event(event);
+            if let Some(msg) = msg {
+                self.handle_message(msg);
+            }
         }
         Ok(())
     }
 
-    fn handle_key(&mut self, key: KeyEvent) {
-        if key.kind != KeyEventKind::Press {
-            return;
-        }
-        match self.mode {
-            Mode::Normal => match key.code {
-                KeyCode::Char('a') => {
-                    self.mode = Mode::Insert;
-                    self.popup.clear().set_title("Add a new task");
-                }
-                KeyCode::Char('d') => {
-                    if let Some(task) = self.tasks_list.remove_selected() {
-                        self.tasks.delete(&task.id);
-                    }
-                }
-                KeyCode::Char('e') => {
-                    self.mode = Mode::Edit;
-                    self.popup.clear().set_title("Edit a task title");
-                    self.popup
-                        .set_input(&self.tasks_list.selected_item().unwrap().title);
-                }
-                KeyCode::Char('q') | KeyCode::Esc => self.prepare_shutdown(),
-                KeyCode::Char('h') | KeyCode::Left => self.select_none(),
-                KeyCode::Char('j') | KeyCode::Down => self.select_next(),
-                KeyCode::Char('k') | KeyCode::Up => self.select_previous(),
-                KeyCode::Char('g') | KeyCode::Home => self.select_first(),
-                KeyCode::Char('G') | KeyCode::End => self.select_last(),
-                KeyCode::Char('l') | KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => {
-                    self.toggle_status();
-                }
-                _ => {}
+    pub fn handle_message(&mut self, msg: AppMsg) {
+        match msg {
+            AppMsg::Input(input_field_msg) => match input_field_msg {
+                InputFieldMsg::Submited(text) => self.on_input_submited(text),
+                InputFieldMsg::Canceled => self.on_input_canceled(),
             },
-            Mode::Insert => match key.code {
-                KeyCode::Esc => self.mode = Mode::Normal,
-                KeyCode::Enter => {
-                    let input = self.popup.get_input().trim();
-                    if !input.is_empty() {
-                        let task = self.tasks.add_task(input);
-                        self.tasks_list.add_task(task);
-                    }
-                    self.mode = Mode::Normal;
-                }
-                KeyCode::Char(c) => self.popup.push(c),
-                KeyCode::Backspace => {
-                    self.popup.pop();
-                }
-                _ => {}
+            AppMsg::TasksList(tasks_list_msg) => match tasks_list_msg {
+                TasksListMsg::AddTask => self.on_add_task(),
+                TasksListMsg::EditTask => self.on_edit_task_title(),
+                TasksListMsg::ToggleStatus => self.on_toggle_status(),
+                TasksListMsg::DeleteTask => self.on_delete_task(),
+                TasksListMsg::SelectedNone => self.on_selected_none(),
+                TasksListMsg::SelectedNext => self.on_selected_next(),
+                TasksListMsg::SelectedPrevious => self.on_selected_previous(),
+                TasksListMsg::SelectedFirst => self.on_selected_first(),
+                TasksListMsg::SelectedLast => self.on_selected_last(),
             },
-            Mode::Edit => match key.code {
-                KeyCode::Esc => self.mode = Mode::Normal,
-                KeyCode::Enter => {
-                    let input = self.popup.get_input().trim();
-                    if !input.is_empty() {
-                        let task = self.tasks_list.selected_item();
-                        if let Some(task) = task {
-                            self.tasks.update_title(&task.id, input);
-                            self.tasks_list.update_selected(input)
-                        }
-                    }
-                    self.mode = Mode::Normal;
-                }
-                KeyCode::Char(c) => self.popup.push(c),
-                KeyCode::Backspace => {
-                    self.popup.pop();
-                }
-                _ => {}
-            },
+            AppMsg::Quit => self.on_quit(),
         }
     }
 
-    fn select_none(&mut self) {
-        self.tasks_list.select_none();
-        self.task_info.clear();
-    }
-
-    fn select_next(&mut self) {
-        self.tasks_list.select_next();
-        self.update_task_info(); // needs another update
-    }
-
-    fn select_previous(&mut self) {
-        self.tasks_list.select_previous();
-        self.update_task_info();
-    }
-
-    fn select_first(&mut self) {
-        self.tasks_list.select_first();
-        self.update_task_info();
-    }
-
-    fn select_last(&mut self) {
-        self.tasks_list.select_last();
-        self.update_task_info(); // needs another update
-    }
-
-    fn toggle_status(&mut self) {
-        let toggled = self.tasks_list.toggle_status();
-        if let Some(task) = toggled {
-            self.tasks.toggle(&task.id);
+    fn add_task(&mut self, title: &str) {
+        if !title.is_empty() {
+            let task = self.tasks.add_task(title);
+            self.tasks_list.add_task(task);
             self.update_task_info();
         }
+        self.mode = Mode::Normal;
     }
 
-    fn prepare_shutdown(&mut self) {
-        self.running = false;
-        self.tasks.save().unwrap();
+    fn update_task_title(&mut self, title: &str) {
+        if !title.is_empty() {
+            let task = self.tasks_list.selected_item();
+            if let Some(task) = task {
+                self.tasks.update_title(&task.id, title);
+                self.tasks_list.update_selected(title);
+                self.update_task_info();
+            }
+        }
+        self.mode = Mode::Normal;
     }
 
     /// Update a [`TaskInfo`] widget based on
     /// currently selected item in [`TasksList`] widget.
     fn update_task_info(&mut self) {
+        if self.tasks_list.is_empty() {
+            self.task_info.clear();
+        }
         if let Some(task) = self.tasks_list.selected_item() {
             self.task_info.set_task(task);
         }
     }
 }
 
-impl Widget for &mut App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let [header_area, main_area, task_info_area, footer_area] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Fill(8),
-            Constraint::Fill(2),
-            Constraint::Length(1),
-        ])
-        .areas(area);
+// ----------
+// Std traits
+// ----------
 
-        App::render_header(header_area, buf);
-        self.tasks_list.render(main_area, buf);
-        self.task_info.render(task_info_area, buf);
-        App::render_footer(footer_area, buf);
-
-        match self.mode {
-            Mode::Normal => {}
-            Mode::Insert => self.popup.render(area, buf),
-            Mode::Edit => self.popup.render(area, buf),
-        }
-        // self.render_selected_item(item_area, buf);
-    }
-}
-
-/// Rendering logic for the app
-impl App {
-    fn render_header(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("My app")
-            .bold()
-            .centered()
-            .render(area, buf);
-    }
-
-    fn render_footer(area: Rect, buf: &mut Buffer) {
-        Paragraph::new("Use ↓↑ to move, ← to unselect, → to change status, g/G to go top/bottom.")
-            .centered()
-            .render(area, buf);
-    }
-}
+// -
