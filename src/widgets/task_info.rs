@@ -47,10 +47,6 @@ impl Component for TaskInfo {
 }
 
 impl TaskInfo {
-    pub fn new(task: Task) -> Self {
-        Self { task: Some(task) }
-    }
-
     pub fn clear(&mut self) {
         self.task = None;
     }
