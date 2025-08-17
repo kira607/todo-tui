@@ -1,6 +1,5 @@
-use ratatui::{
-    layout::{Constraint, Flex, Layout, Rect},
-};
+use chrono::NaiveDate;
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use uuid::Uuid;
 
 /// Генерирует уникальный ID с необязательным префиксом.
@@ -32,4 +31,14 @@ pub fn center(area: Rect, horizontal: Constraint, vertical: Constraint) -> Rect 
         .areas(area);
     let [area] = Layout::vertical([vertical]).flex(Flex::Center).areas(area);
     area
+}
+
+/// Turn a NaiveDate into string.
+/// Returns `default` if a date is None.
+pub fn date_to_string(date: Option<NaiveDate>, default: &str) -> String {
+    if date != None {
+        date.unwrap().to_string()
+    } else {
+        default.into()
+    }
 }
