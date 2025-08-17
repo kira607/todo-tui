@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-use crate::widgets::component::Component;
+use super::component::{Component, Focusable};
 
 /// Messages produced by InputField
 pub enum InputFieldMsg {
@@ -22,6 +22,53 @@ pub struct InputField {
     buffer: String,
     // Cursor position
     cursor: usize,
+    // Whether the widget is active or not
+    focused: bool,
+}
+
+impl InputField {
+    pub fn new(title: &str, text: Option<&str>) -> Self {
+        let new_buffer = match text {
+            Some(t) => String::from(t),
+            None => String::default(),
+        };
+        let cursor: usize = new_buffer.chars().count().into();
+        Self {
+            title: String::from(title),
+            buffer: new_buffer,
+            cursor: cursor,
+            focused: true,
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.buffer.is_empty()
+    }
+
+    pub fn cursor_pos(&self) -> usize {
+        self.cursor
+    }
+
+    pub fn clear(&mut self) -> &mut Self {
+        self.buffer.clear();
+        self.cursor = 0;
+        self
+    }
+
+    pub fn set_title(&mut self, new_title: &str) -> &mut Self {
+        self.title = new_title.to_string();
+        self
+    }
+
+    pub fn set_input(&mut self, new_input: &str) -> &mut Self {
+        self.buffer = String::from(new_input);
+        self.cursor = self.buffer.chars().count();
+        self
+    }
+
+    // pub fn get_input(&self) -> &str {
+    //     &self.buffer
+    // }
 }
 
 // Component implementation
@@ -39,10 +86,12 @@ impl Component for InputField {
 
         input.render(area, frame.buffer_mut());
 
-        frame.set_cursor_position(Position::new(
-            area.x + 1 + self.cursor_pos() as u16,
-            area.y + 1,
-        ));
+        if self.is_focused() {
+            frame.set_cursor_position(Position::new(
+                area.x + 1 + self.cursor_pos() as u16,
+                area.y + 1,
+            ));
+        }
     }
 
     fn handle_event(&mut self, event: Event) -> Option<InputFieldMsg> {
@@ -59,8 +108,8 @@ impl Component for InputField {
             KeyCode::Delete => self.remove_next_char(),
             KeyCode::Left => self.cursor_left(),
             KeyCode::Right => self.cursor_right(),
-            KeyCode::Enter => Some(InputFieldMsg::Submited(self.buffer.clone())),
-            KeyCode::Esc => Some(InputFieldMsg::Canceled),
+            KeyCode::Enter => self.submit_input(),
+            KeyCode::Esc => self.cancel_input(),
             _ => None,
         }
     }
@@ -113,38 +162,24 @@ impl InputField {
         }
         None
     }
+
+    pub fn submit_input(&mut self) -> Option<InputFieldMsg> {
+        Some(InputFieldMsg::Submited(self.buffer.clone()))
+    }
+
+    pub fn cancel_input(&mut self) -> Option<InputFieldMsg> {
+        Some(InputFieldMsg::Canceled)
+    }
 }
 
-// Manipulation and info
-impl InputField {
-    pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
+impl Focusable for InputField {
+    fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
     }
 
-    pub fn cursor_pos(&self) -> usize {
-        self.cursor
+    fn is_focused(&mut self) -> bool {
+        self.focused
     }
-
-    pub fn clear(&mut self) -> &mut Self {
-        self.buffer.clear();
-        self.cursor = 0;
-        self
-    }
-
-    pub fn set_title(&mut self, new_title: &str) -> &mut Self {
-        self.title = new_title.to_string();
-        self
-    }
-
-    pub fn set_input(&mut self, new_input: &str) -> &mut Self {
-        self.buffer = String::from(new_input);
-        self.cursor = self.buffer.chars().count();
-        self
-    }
-
-    // pub fn get_input(&self) -> &str {
-    //     &self.buffer
-    // }
 }
 
 // Different built-in traits
@@ -155,6 +190,7 @@ impl Default for InputField {
             title: String::default(),
             buffer: String::default(),
             cursor: usize::default(),
+            focused: false,
         }
     }
 }
@@ -165,6 +201,7 @@ impl From<String> for InputField {
             title: String::default(),
             buffer: value.clone(),
             cursor: value.chars().count(),
+            focused: false,
         }
     }
 }
@@ -175,6 +212,7 @@ impl From<&str> for InputField {
             title: String::default(),
             buffer: String::from(value),
             cursor: value.chars().count(),
+            focused: false,
         }
     }
 }

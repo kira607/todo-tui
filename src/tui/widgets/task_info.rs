@@ -2,10 +2,8 @@ use ratatui::{
     crossterm::event::Event, text::Line, widgets::{Block, Borders, Paragraph, Widget}
 };
 
-use crate::core::Task;
-use crate::widgets::component::Component;
-
-// TODO: Make TaskInfo a component;
+use crate::{core::task::Task, utils::date_to_string};
+use super::component::Component;
 
 pub enum TaskInfoMsg {}
 
@@ -20,17 +18,12 @@ impl Component for TaskInfo {
         let lines: Vec<Line<'_>>;
 
         if let Some(task) = &self.task {
-            let scheduled = if task.scheduled != None {
-                task.scheduled.unwrap().to_string()
-            } else {
-                "-".into()
-            };
             lines = vec![
                 Line::from(task.title.clone()),
                 Line::from(format!("id: {}", task.id)),
                 Line::from(format!("done: {}", task.done.to_string())),
                 Line::from(format!("created: {}", task.created.to_string())),
-                Line::from(format!("scheduled: {}", scheduled)),
+                Line::from(format!("scheduled: {}", date_to_string(task.scheduled, "-"))),
             ];
         } else {
             lines = vec![Line::from("No task selected...")];

@@ -10,7 +10,8 @@ use ratatui::{
     widgets::{Block, Borders, HighlightSpacing, List, ListItem, ListState, StatefulWidget},
 };
 
-use crate::{core::Task, widgets::component::Component};
+use super::component::Component;
+use crate::core::task::Task;
 
 const TODO_HEADER_STYLE: Style = Style::new().fg(SLATE.c100).bg(BLUE.c800);
 const NORMAL_ROW_BG: Color = SLATE.c950;

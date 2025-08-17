@@ -6,9 +6,9 @@
     "configurations": [
         {
             "name": "Cargo Run",
-            "type": "cppdbg",
+            "type": "lldb",
             "request": "launch",
-            "program": "cargo run",
+            "program": "cargo",
             "args": [],
             "cwd": "${workspaceFolder}",
             // "preLaunchTask": "cargo build",
